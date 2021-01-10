@@ -1,0 +1,205 @@
+---
+title: Natural Events that affect the Population Health and have the greatest Economic
+  Consequences across US
+author: "Mohith J"
+date: "07/01/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+## Synopsis
+
+This report mainly focuses on two questions and they are,  
+- Across the United States, which types of events are most harmful with respect to Population health?  
+- Across the United States, which types of events have the greatest economic consequences?  
+The data to be explored is taken from US NOAA's Storm Database from the year 1950 to 2011. Although the data is a broad estimate of the real events and the formatting of data in some places are quite bad, but measures are taken to minimize the discrepancies. The data is explored such that the events having major Injuries/Fatalities are the events that affect the Population health the most. And the events with high Property damage and crop damage are the events having major economic consequences. Those events are plotted nicely with the help of a bar plot which can be used to access the situation.
+
+## Data Processing
+
+The [Data](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2) from NOAA's Storm Database which has records from 1950 to 2011. The [Storm data Documentation](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf) and [FAQ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf) provides various information in identifying the different variables of the data and other common info related to the data.
+
+### Reading the data
+
+First the data is downloaded and read into an R object called data. The data is a bz2 zip archive file and `read.csv()` supports reading those types of files without unzipping them which is convenient in this case.
+
+```{r reading.data}
+if (file.exists("StormData.csv.bz2") == FALSE){
+  url<-"https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+  download.file(url = url, destfile = "StormData.csv.bz2", method = "auto")
+}
+data <- read.csv("StormData.csv.bz2")
+```
+
+### Processing the data
+
+Have a overview of the data before we proceed.
+
+```{r brief}
+str(data)
+```
+
+The main variables of concern is the `EVTYPE` where multiple events are recorded. In reference to the first half of our analysis purpose, Population health depends on injuries and fatalities and those respective variables need to be of our concern. In reference to the next half of our analysis purpose, Economic disturbances are caused by damage and the respective variables need to be checked out.
+We can ignore all the other variables from the data that don't matter.
+OUr focus is on finding events that causes major disturbances and hence lets take a look at their numbers
+
+```{r event.length}
+length(levels(factor(data$EVTYPE)))
+```
+
+That is a lot of events and some of them needs to be culled which will be done later in the analysis.
+We need to convert all the strings in the variable `EVTYPE` to upper case just so it would not cause any discrepancies later in the analysis.
+
+```{r upper}
+data$EVTYPE <- toupper(data$EVTYPE)
+```
+
+#### Data processing regarding Population health
+
+I am assuming that both injuries and fatalities affect the Population health and therefore is combined together to form an estimate which is considered for the analysis.
+
+```{r combine}
+data$HEALTH <- data$INJURIES + data$FATALITIES
+```
+
+#### Data processing regarding Economic consequences 
+
+Just as above, I am assuming that both Property damage and crop damage affects the country economically and therefore it needs to be combined. But before that we need to focus on variable `PROPDMGEXP` and `CROPDMGEXP`. According to the documentation, that variable has different characters in it which specifies the currency unit whether the damage incurred is in Millions (denoted by M) or in Billions (denoted by B), etc. Lets take a look at the different character set of the variable.
+
+```{r propdmgexp}
+levels(factor(data$PROPDMGEXP))
+```
+
+There are a lot of special characters mixed in too, which needs to be taken care of. My strategy in estimating the damage is to convert them into numeric type and multiply it to the original damage estimate record present in the data to obtain the total damage estimate for each variable. This can be done by substituting the characters with their numeric equivalent and converting them to numeric type.
+
+```{r convert.prop}
+data$PROPDMGEXP <- gsub("^1", 10, data$PROPDMGEXP, ignore.case = TRUE)
+data$PROPDMGEXP <- gsub("^2", 100, data$PROPDMGEXP, ignore.case = TRUE)
+data$PROPDMGEXP <- gsub("^3", 1000, data$PROPDMGEXP, ignore.case = TRUE)
+data$PROPDMGEXP <- gsub("^4", 10000, data$PROPDMGEXP, ignore.case = TRUE)
+data$PROPDMGEXP <- gsub("^5", 1e+105, data$PROPDMGEXP, ignore.case = TRUE)
+data$PROPDMGEXP <- gsub("^6", 1e+106, data$PROPDMGEXP, ignore.case = TRUE)
+data$PROPDMGEXP <- gsub("^7", 1e+107, data$PROPDMGEXP, ignore.case = TRUE)
+data$PROPDMGEXP <- gsub("^8", 1e+108, data$PROPDMGEXP, ignore.case = TRUE)
+data$PROPDMGEXP <- gsub("^B", 1e+109, data$PROPDMGEXP, ignore.case = TRUE)
+data$PROPDMGEXP <- gsub("^H", 100, data$PROPDMGEXP, ignore.case = TRUE)
+data$PROPDMGEXP <- gsub("^K", 1000, data$PROPDMGEXP, ignore.case = TRUE)
+data$PROPDMGEXP <- gsub("^M", 1e+106, data$PROPDMGEXP, ignore.case = TRUE)
+data$PROPDMGEXP <- gsub("^$", 1, data$PROPDMGEXP, ignore.case = TRUE)
+data$PROPDMGEXP <- gsub("^\\-", 1, data$PROPDMGEXP, ignore.case = TRUE)
+data$PROPDMGEXP <- gsub("^\\?", 1, data$PROPDMGEXP, ignore.case = TRUE)
+data$PROPDMGEXP <- gsub("^\\+", 1, data$PROPDMGEXP, ignore.case = TRUE)
+data$PROPDMGEXP <- gsub("^0", 1, data$PROPDMGEXP, ignore.case = TRUE)
+data$PROPDMGEXP <- as.numeric(data$PROPDMGEXP)
+levels(factor(data$CROPDMGEXP))
+```
+
+Applying the same process to `CROPDMGEXP`, which is the character set for crop damage.  
+As discussed, the multiplying strategy is used and both the variables i.e, crop damage and property damage is added together to get a total estimate that affects the country economically.
+
+```{r convert.crop}
+data$CROPDMGEXP <- gsub("^2", 100, data$CROPDMGEXP, ignore.case = TRUE)
+data$CROPDMGEXP <- gsub("^B", 1e+109, data$CROPDMGEXP, ignore.case = TRUE)
+data$CROPDMGEXP <- gsub("^K", 1000, data$CROPDMGEXP, ignore.case = TRUE)
+data$CROPDMGEXP <- gsub("^M", 1e+106, data$CROPDMGEXP, ignore.case = TRUE)
+data$CROPDMGEXP <- gsub("^0", 1, data$CROPDMGEXP, ignore.case = TRUE)
+data$CROPDMGEXP <- gsub("^$", 1, data$CROPDMGEXP, ignore.case = TRUE)
+data$CROPDMGEXP <- gsub("\\?", 1, data$CROPDMGEXP, ignore.case = TRUE)
+data$CROPDMGEXP <- as.numeric(data$CROPDMGEXP)
+data$PROPDMG <- data$PROPDMG * data$PROPDMGEXP
+data$CROPDMG <- data$CROPDMG * data$CROPDMGEXP
+data$DAMAGE <- data$PROPDMG + data$CROPDMG
+```
+
+The data is ready for exploring as all the variables needed are processed accordingly so it would not further hinder the analysis.
+
+## Results
+
+### Events affecting Population Health
+
+The total and average injuries/fatalities is calculated for each event type by using `tapply()`. The events having high values of either estimate would be the most harmful with respect to Population health.  
+We already know there are 898 different events and we do not to explore each one and hence some threshold is placed such that those events which exceed a certain value of total and average injuries/fatalities are the only ones considered for viewing.  
+
+```{r population.result}
+htot <- sort(tapply(data$HEALTH, factor(data$EVTYPE), sum, na.rm = T), 
+             decreasing = TRUE)
+htot <- htot[htot > 100]
+head(htot,8)
+havg <- sort(tapply(data$HEALTH, factor(data$EVTYPE), mean, na.rm = T), 
+             decreasing = TRUE)
+havg <- havg[havg > 5]
+```
+
+##### **Tornadoes have a huge Injury/Fatality count making it the most harmful event with respect to Population health based on the total value.**  
+The other events with low counts compared to tornadoes can be viewed with the help of a barplot.
+
+```{r total.health.plot, fig.height=7}
+dfhtot <- data.frame(Event = names(htot), Total.Injury.Fatality = htot,
+                     row.names = NULL)
+library(ggplot2)
+phtot <- ggplot(data = dfhtot, aes(Total.Injury.Fatality,
+          reorder(Event, Total.Injury.Fatality))) + geom_col() + 
+  ggtitle("Total Injuries/Fatalities across US from 1950 to 2011") + 
+        xlab("Events") + ylab("Total Injuries/Fatalities") +
+              coord_cartesian(xlim = c(0,9000))
+phtot
+```
+
+The events does not even come close to the count of tornadoes but are the next most harmful disasters based on the total value.
+Note : The total count of tornadoes is exceeding the scale limit in the plot.
+lets now take a look at the events based on the average value.
+
+```{r average.health.plot, fig.height=7}
+head(havg, 8)
+dfhavg <- data.frame(Event = names(havg), Avg.Injury.Fatality = havg, 
+                     row.names = NULL)
+phavg <- ggplot(data = dfhavg, aes(reorder(Event, Avg.Injury.Fatality),
+          Avg.Injury.Fatality)) + geom_col() + 
+      ggtitle("Average Injuries/Fatalities across US from 1950 to 2011") + 
+          xlab("Events") + ylab("Average Injuries/Fatalities") + coord_flip()
+phavg
+```
+
+Tropical storm gordon seem to be having the highest average but it can be neglected as it is a one time event.
+Lets take a look at the number of wildfire occurrences as it has the next most average value.
+
+```{r wildfire}
+nrow(data[grepl("WILD FIRES",data$EVTYPE),])
+```
+
+Wild fires are recorded only 4 times and there seems to be some data formatting errors where events are repeated multiple times due to typo and other such factors (Refer the example below). There are many such events and reformatting each one takes a lot of time. Therefore the events affecting the population health based on the average value will not be considered in this analysis. We are going with the total count instead of the average count.
+
+```{r event.typo}
+ex <- data[grepl(".*WILD.*",data$EVTYPE),]
+levels(factor(ex$EVTYPE))
+```
+
+### Events affecting the country economically
+
+The events are explored in the same way as before. The total value of damages is estimated for each event type and the event with the highest count is likely the one with greatest economic consequences. We are placing threshold here aswell such that events incurring more than a billion dollars will be selected.
+
+```{r economy.result}
+dtot <- sort(tapply(data$DAMAGE, factor(data$EVTYPE), sum, na.rm = T), 
+             decreasing = TRUE)
+highdtot <- dtot[dtot > 1e+109]
+head(highdtot, 8)
+```
+
+#### **Floods have the highest Total Damages which exceeds 100 Billion Dollars making it the event with highest economic consequences.**  
+The next set of events with high damages to the crop/property can be viewed with the help of a barplot.
+
+```{r economy.plot, fig.height= 7}
+highdtotdf <- data.frame(Event = names(highdtot), Total.Damage = highdtot, 
+                         row.names = NULL)
+highdtotp <- ggplot(data = highdtotdf, aes(reorder(Event, Total.Damage),
+              Total.Damage)) + geom_col() + 
+  ggtitle("Total Damages across US from 1950 to 2011") + 
+  xlab("Events") + ylab("Total Damages (In USD)") + coord_flip()
+highdtotp
+```
+
+## Conclusion
+
+Tornado is the most harmful event with respect to the population health.  
+Floods have the greatest economic consequences.
